@@ -1,15 +1,14 @@
-/* __imports__ */
+import type { MermaidConfig } from 'mermaid'
+import setups from '#slidev/setups/mermaid'
+import { createSingletonPromise } from '@antfu/utils'
 
-import type { MermaidOptions } from '@slidev/types'
-import { defineMermaidSetup } from '@slidev/types'
-
-export default defineMermaidSetup(() => {
-  // eslint-disable-next-line prefer-const
-  let injection_return: MermaidOptions = {
+export default createSingletonPromise(async () => {
+  const setupReturn: MermaidConfig = {
     theme: 'default',
   }
 
-  /* __injections__ */
+  for (const setup of setups)
+    Object.assign(setupReturn, await setup())
 
-  return injection_return
+  return setupReturn
 })

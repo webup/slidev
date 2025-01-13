@@ -3,9 +3,9 @@ import { useLocalStorage } from '@vueuse/core'
 import { onMounted, watch } from 'vue'
 import { recorder } from '../logic/recording'
 import { currentCamera, showRecordingDialog } from '../state'
-import DevicesList from './DevicesList.vue'
+import DevicesSelectors from './DevicesSelectors.vue'
+import IconButton from './IconButton.vue'
 import MenuButton from './MenuButton.vue'
-import HiddenText from './HiddenText.vue'
 
 const {
   recording,
@@ -34,36 +34,32 @@ onMounted(() => {
 </script>
 
 <template>
-  <button
+  <IconButton
     v-if="currentCamera !== 'none'"
-    class="slidev-icon-btn <md:hidden"
+    class="<md:hidden"
     :class="{ 'text-green-500': Boolean(showAvatar && streamCamera) }"
-    title="Show camera view"
+    title="Toggle camera view"
     @click="toggleAvatar"
   >
-    <HiddenText text="Toggle camera view" />
-    <carbon:user-avatar />
-  </button>
+    <div class="i-carbon:user-avatar" />
+  </IconButton>
 
-  <button
-    class="slidev-icon-btn"
+  <IconButton
     :class="{ 'text-red-500': recording }"
-    title="Recording"
+    :title="recording ? 'Stop record video' : 'Record video'"
     @click="toggleRecording"
   >
-    <HiddenText :text="recording ? 'Stop record video' : 'Record video'" />
-    <carbon:stop-outline v-if="recording" />
-    <carbon:video v-else />
-  </button>
+    <div v-if="recording" class="i-carbon:stop-outline" />
+    <div v-else class="i-carbon:video" />
+  </IconButton>
   <MenuButton :disabled="recording">
     <template #button>
-      <button class="slidev-icon-btn h-full !text-sm !px-0">
-        <HiddenText text="Select recording device" />
-        <carbon:chevron-up class="opacity-50" />
-      </button>
+      <IconButton title="Select recording device" class="h-full !text-sm !px-0 aspect-initial">
+        <div class="i-carbon:chevron-up opacity-50" />
+      </IconButton>
     </template>
     <template #menu>
-      <DevicesList />
+      <DevicesSelectors />
     </template>
   </MenuButton>
 </template>

@@ -12,17 +12,22 @@ Learn more: https://sli.dev/guide/syntax.html#line-highlighting
 -->
 
 <script setup lang="ts">
-import { range, remove } from '@antfu/utils'
-import { parseRangeString } from '@slidev/parser/core'
+import type { PropType } from 'vue'
 import { useClipboard } from '@vueuse/core'
-import { computed, getCurrentInstance, inject, onMounted, onUnmounted, ref, watchEffect } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watchEffect } from 'vue'
+import { CLASS_VCLICK_HIDDEN, CLICKS_MAX } from '../constants'
+import { useSlideContext } from '../context'
 import { configs } from '../env'
-import { CLASS_VCLICK_TARGET, injectionClicks, injectionClicksDisabled, injectionClicksElements } from '../constants'
-import { makeId } from '../logic/utils'
+import { makeId, updateCodeHighlightRange } from '../logic/utils'
 
 const props = defineProps({
   ranges: {
+    type: Array as PropType<string[]>,
     default: () => [],
+  },
+  finally: {
+    type: [String, Number],
+    default: 'last',
   },
   startLine: {
     type: Number,
@@ -33,8 +38,8 @@ const props = defineProps({
     default: configs.lineNumbers,
   },
   at: {
-    type: Number,
-    default: undefined,
+    type: [String, Number],
+    default: '+1',
   },
   maxHeight: {
     type: String,
@@ -42,55 +47,62 @@ const props = defineProps({
   },
 })
 
-const clicks = inject(injectionClicks)
-const elements = inject(injectionClicksElements)
-const disabled = inject(injectionClicksDisabled)
-
+const { $clicksContext: clicks } = useSlideContext()
 const el = ref<HTMLDivElement>()
-const vm = getCurrentInstance()
+const id = makeId()
+
+onUnmounted(() => {
+  clicks!.unregister(id)
+})
+
+watchEffect(() => {
+  el.value?.classList.toggle('slidev-code-line-numbers', props.lines)
+})
 
 onMounted(() => {
-  const prev = props.at == null ? elements?.value.length : props.at
-  const index = computed(() => {
-    if (disabled?.value)
-      return props.ranges.length - 1
-    return Math.min(Math.max(0, (clicks?.value || 0) - (prev || 0)), props.ranges.length - 1)
+  if (!clicks || !props.ranges?.length)
+    return
+
+  const clicksInfo = clicks.calculateSince(props.at, props.ranges.length - 1)
+  clicks.register(id, clicksInfo)
+
+  const index = computed(() => clicksInfo ? Math.max(0, clicks.current - clicksInfo.start + 1) : CLICKS_MAX)
+
+  const finallyRange = computed(() => {
+    return props.finally === 'last' ? props.ranges.at(-1) : props.finally.toString()
   })
-  const rangeStr = computed(() => props.ranges[index.value] || '')
-  if (props.ranges.length >= 2 && !disabled?.value) {
-    const id = makeId()
-    const ids = range(props.ranges.length - 1).map(i => id + i)
-    if (elements?.value) {
-      elements.value.push(...ids)
-      onUnmounted(() => ids.forEach(i => remove(elements.value, i)), vm)
-    }
-  }
 
   watchEffect(() => {
     if (!el.value)
       return
-    const isDuoTone = el.value.querySelector('.shiki-dark')
-    const targets = isDuoTone ? Array.from(el.value.querySelectorAll('.shiki')) : [el.value]
-    const startLine = props.startLine
-    for (const target of targets) {
-      const lines = Array.from(target.querySelectorAll('code > .line'))
-      const highlights: number[] = parseRangeString(lines.length + startLine - 1, rangeStr.value)
-      lines.forEach((line, idx) => {
-        const highlighted = highlights.includes(idx + startLine)
-        line.classList.toggle(CLASS_VCLICK_TARGET, true)
-        line.classList.toggle('highlighted', highlighted)
-        line.classList.toggle('dishonored', !highlighted)
-      })
-      if (props.maxHeight) {
-        const highlightedEls = Array.from(target.querySelectorAll('.line.highlighted')) as HTMLElement[]
-        const height = highlightedEls.reduce((acc, el) => el.offsetHeight + acc, 0)
-        if (height > el.value.offsetHeight) {
-          highlightedEls[0].scrollIntoView({ behavior: 'smooth', block: 'start' })
-        }
-        else if (highlightedEls.length > 0) {
-          const middleEl = highlightedEls[Math.round((highlightedEls.length - 1) / 2)]
-          middleEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
-        }
+
+    let rangeStr = props.ranges[index.value] ?? finallyRange.value
+    const hide = rangeStr === 'hide'
+    el.value.classList.toggle(CLASS_VCLICK_HIDDEN, hide)
+    if (hide)
+      rangeStr = props.ranges[index.value + 1] ?? finallyRange.value
+
+    const pre = el.value.querySelector('.shiki')!
+    const lines = Array.from(pre.querySelectorAll('code > .line'))
+    const linesCount = lines.length
+
+    updateCodeHighlightRange(
+      rangeStr,
+      linesCount,
+      props.startLine,
+      no => [lines[no]],
+    )
+
+    // Scroll to the highlighted line if `maxHeight` is set
+    if (props.maxHeight) {
+      const highlightedEls = Array.from(pre.querySelectorAll('.line.highlighted')) as HTMLElement[]
+      const height = highlightedEls.reduce((acc, el) => el.offsetHeight + acc, 0)
+      if (height > el.value.offsetHeight) {
+        highlightedEls[0].scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }
+      else if (highlightedEls.length > 0) {
+        const middleEl = highlightedEls[Math.round((highlightedEls.length - 1) / 2)]
+        middleEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
       }
     }
   })
@@ -107,7 +119,8 @@ function copyCode() {
 
 <template>
   <div
-    ref="el" class="slidev-code-wrapper relative group"
+    ref="el"
+    class="slidev-code-wrapper relative group"
     :class="{
       'slidev-code-line-numbers': props.lines,
     }"

@@ -1,18 +1,19 @@
-/* __imports__ */
-import { and, not, or } from '@vueuse/math'
 import type { NavOperations, ShortcutOptions } from '@slidev/types'
-import { downloadPDF, go, goFirst, goLast, next, nextSlide, prev, prevSlide } from '../logic/nav'
+import setups from '#slidev/setups/shortcuts'
+import { and, not, or } from '@vueuse/math'
+import { useDrawings } from '../composables/useDrawings'
+import { useNav } from '../composables/useNav'
 import { toggleDark } from '../logic/dark'
-import { magicKeys, showGotoDialog, showOverview, toggleOverview } from '../state'
-import { drawingEnabled } from '../logic/drawings'
+import { activeDragElement, magicKeys, showGotoDialog, showOverview, toggleOverview } from '../state'
+import { downloadPDF } from '../utils'
 import { currentOverviewPage, downOverviewPage, nextOverviewPage, prevOverviewPage, upOverviewPage } from './../logic/overview'
 
 export default function setupShortcuts() {
+  const { go, goFirst, goLast, next, nextSlide, prev, prevSlide } = useNav()
+  const { drawingEnabled } = useDrawings()
   const { escape, space, shift, left, right, up, down, enter, d, g, o, '`': backtick } = magicKeys
 
-  // @ts-expect-error injected in runtime
-  // eslint-disable-next-line unused-imports/no-unused-vars
-  const injection_arg: NavOperations = {
+  const context: NavOperations = {
     next,
     prev,
     nextSlide,
@@ -28,18 +29,19 @@ export default function setupShortcuts() {
     showGotoDialog: () => showGotoDialog.value = !showGotoDialog.value,
   }
 
-  // eslint-disable-next-line prefer-const
-  let injection_return: ShortcutOptions[] = [
+  const navViaArrowKeys = and(not(showOverview), not(activeDragElement))
+
+  let shortcuts: ShortcutOptions[] = [
     { name: 'next_space', key: and(space, not(shift)), fn: next, autoRepeat: true },
     { name: 'prev_space', key: and(space, shift), fn: prev, autoRepeat: true },
-    { name: 'next_right', key: and(right, not(shift), not(showOverview)), fn: next, autoRepeat: true },
-    { name: 'prev_left', key: and(left, not(shift), not(showOverview)), fn: prev, autoRepeat: true },
+    { name: 'next_right', key: and(right, not(shift), navViaArrowKeys), fn: next, autoRepeat: true },
+    { name: 'prev_left', key: and(left, not(shift), navViaArrowKeys), fn: prev, autoRepeat: true },
     { name: 'next_page_key', key: 'pageDown', fn: next, autoRepeat: true },
     { name: 'prev_page_key', key: 'pageUp', fn: prev, autoRepeat: true },
-    { name: 'next_down', key: and(down, not(showOverview)), fn: nextSlide, autoRepeat: true },
-    { name: 'prev_up', key: and(up, not(showOverview)), fn: () => prevSlide(false), autoRepeat: true },
+    { name: 'next_down', key: and(down, navViaArrowKeys), fn: nextSlide, autoRepeat: true },
+    { name: 'prev_up', key: and(up, navViaArrowKeys), fn: prevSlide, autoRepeat: true },
     { name: 'next_shift', key: and(right, shift), fn: nextSlide, autoRepeat: true },
-    { name: 'prev_shift', key: and(left, shift), fn: () => prevSlide(false), autoRepeat: true },
+    { name: 'prev_shift', key: and(left, shift), fn: prevSlide, autoRepeat: true },
     { name: 'toggle_dark', key: and(d, not(drawingEnabled)), fn: toggleDark },
     { name: 'toggle_overview', key: and(or(o, backtick), not(drawingEnabled)), fn: toggleOverview },
     { name: 'hide_overview', key: and(escape, not(drawingEnabled)), fn: () => showOverview.value = false },
@@ -58,11 +60,13 @@ export default function setupShortcuts() {
     },
   ]
 
-  const baseShortcutNames = new Set(injection_return.map(s => s.name))
+  const baseShortcutNames = new Set(shortcuts.map(s => s.name))
 
-  /* __chained_injections__ */
+  for (const setup of setups) {
+    shortcuts = setup(context, shortcuts)
+  }
 
-  const remainingBaseShortcutNames = injection_return.filter(s => s.name && baseShortcutNames.has(s.name))
+  const remainingBaseShortcutNames = shortcuts.filter(s => s.name && baseShortcutNames.has(s.name))
   if (remainingBaseShortcutNames.length === 0) {
     const message = [
       '========== WARNING ==========',
@@ -76,5 +80,5 @@ export default function setupShortcuts() {
     console.warn(message)
   }
 
-  return injection_return
+  return shortcuts
 }

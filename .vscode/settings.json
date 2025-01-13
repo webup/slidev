@@ -45,5 +45,11 @@
     "json",
     "jsonc",
     "yaml"
-  ]
+  ],
+  "vitest.disableWorkspaceWarning": true,
+  "slidev.include": [
+    "**/slides.md",
+    "packages/vscode/syntax/slidev.example.md"
+  ],
+  "vue.server.hybridMode": "typeScriptPluginOnly"
 }

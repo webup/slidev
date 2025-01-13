@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import TitleRenderer from '#slidev/title-renderer'
 import Fuse from 'fuse.js'
-import { go, rawRoutes } from '../logic/nav'
+import { computed, ref, watch } from 'vue'
+import { useNav } from '../composables/useNav'
 import { activeElement, showGotoDialog } from '../state'
-import Titles from '/@slidev/titles.md'
 
 const container = ref<HTMLDivElement>()
 const input = ref<HTMLInputElement>()
@@ -12,11 +12,13 @@ const items = ref<HTMLLIElement[]>()
 const text = ref('')
 const selectedIndex = ref(0)
 
+const { go, slides } = useNav()
+
 function notNull<T>(value: T | null | undefined): value is T {
   return value !== null && value !== undefined
 }
 
-const fuse = computed(() => new Fuse(rawRoutes.map(i => i.meta?.slide).filter(notNull), {
+const fuse = computed(() => new Fuse(slides.value.map(i => i.meta?.slide).filter(notNull), {
   keys: ['no', 'title'],
   threshold: 0.3,
   shouldSort: true,
@@ -133,42 +135,43 @@ watch(activeElement, () => {
         @input="updateText"
       >
     </div>
-    <ul
+    <div
       v-if="result.length > 0"
       ref="list"
       class="autocomplete-list"
       shadow="~"
       border="~ transparent rounded dark:main"
     >
-      <li
-        v-for="(item, index) of result"
-        ref="items"
-        :key="item.id"
-        role="button"
-        tabindex="0"
-        p="x-4 y-2"
-        cursor-pointer
-        hover="op100"
-        flex="~ gap-2"
-        w-90
-        items-center
-        :border="index === 0 ? '' : 't main'"
-        :class="selectedIndex === index ? 'bg-active op100' : 'op80'"
-        @click.stop.prevent="select(item.no)"
-      >
-        <div w-4 text-right op50 text-sm>
-          {{ item.no }}
-        </div>
-        <Titles :no="item.no" />
-      </li>
-    </ul>
+      <ul table w-full border-collapse>
+        <li
+          v-for="(item, index) of result"
+          ref="items"
+          :key="item.id"
+          role="button"
+          tabindex="0"
+          cursor-pointer
+          hover="op100"
+          table-row
+          items-center
+          :border="index === 0 ? undefined : 't main'"
+          :class="selectedIndex === index ? 'bg-active op100' : 'op80'"
+          @click.stop.prevent="select(item.no)"
+        >
+          <div text-right op50 text-sm table-cell py-2 pl-4 pr-3 vertical-middle>
+            {{ item.no }}
+          </div>
+          <TitleRenderer table-cell py-2 pr-4 w-full :no="item.no" />
+        </li>
+      </ul>
+    </div>
   </div>
 </template>
 
-<style scoped lang="postcss">
+<style scoped>
 .autocomplete-list {
-  @apply bg-main transform mt-1 overflow-auto;
-  max-height: calc( 100vh - 100px );
+  --uno: bg-main mt-1;
+  overflow: auto;
+  max-height: calc(100vh - 100px);
 }
 
 .autocomplete {

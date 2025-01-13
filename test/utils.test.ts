@@ -1,8 +1,12 @@
+import type { ResolvedFontOptions, SlideInfo } from '@slidev/types'
+import { relative, resolve } from 'node:path'
+import { slash } from '@antfu/utils'
 import MarkdownIt from 'markdown-it'
 import { describe, expect, it } from 'vitest'
-import type { ResolvedFontOptions } from '@slidev/types'
+import YAML from 'yaml'
 import { parseAspectRatio, parseRangeString } from '../packages/parser/src'
-import { generateGoogleFontsUrl, stringifyMarkdownTokens } from '../packages/slidev/node/utils'
+import { getRoots } from '../packages/slidev/node/resolver'
+import { generateGoogleFontsUrl, stringifyMarkdownTokens, updateFrontmatterPatch } from '../packages/slidev/node/utils'
 
 describe('utils', () => {
   it('page-range', () => {
@@ -55,5 +59,71 @@ describe('utils', () => {
         provider: 'google',
       } as ResolvedFontOptions),
     ).toMatchSnapshot()
+  })
+
+  it('roots', async () => {
+    const { cliRoot, clientRoot, userRoot, userWorkspaceRoot } = await getRoots(resolve('slides.md'))
+    const expectRelative = (v: string) => expect(slash(relative(__dirname, v)))
+    expectRelative(cliRoot).toMatchInlineSnapshot(`"../packages/slidev"`)
+    expectRelative(clientRoot).toMatchInlineSnapshot(`"../packages/client"`)
+    expectRelative(userRoot).toMatchInlineSnapshot(`".."`)
+    expectRelative(userWorkspaceRoot).toMatchInlineSnapshot(`".."`)
+  })
+
+  it('update frontmatter patch', async () => {
+    const dragPos = {
+      foo: '1,2,3,4',
+    }
+    function createFakeSource(yaml: string) {
+      const doc = YAML.parseDocument(yaml)
+      return {
+        frontmatter: {},
+        source: {
+          frontmatter: doc.toJSON() || {},
+          frontmatterRaw: yaml,
+          frontmatterDoc: doc,
+        },
+      } as SlideInfo
+    }
+    function expectFrontmatter(slide: SlideInfo) {
+      return expect(slide.source.frontmatterDoc?.toString())
+    }
+
+    const slide1 = createFakeSource(``)
+    updateFrontmatterPatch(slide1, { dragPos })
+    expectFrontmatter(slide1).toMatchInlineSnapshot(`
+      "dragPos:
+        foo: 1,2,3,4
+      "
+    `)
+
+    const slide2 = createFakeSource(`
+      # comment
+      title: Hello  # another comment
+      dragPos:
+        bar: 5,6,7,8
+    `)
+    updateFrontmatterPatch(slide2, { dragPos })
+    expectFrontmatter(slide2).toMatchInlineSnapshot(`
+      "# comment
+      title: Hello # another comment
+      dragPos:
+        foo: 1,2,3,4
+      "
+    `)
+
+    // remove a field
+    const slide3 = createFakeSource(`
+      # comment
+      title: Hello  # another comment
+      dragPos:
+        bar: 5,6,7,8
+    `)
+    updateFrontmatterPatch(slide3, { title: null })
+    expectFrontmatter(slide3).toMatchInlineSnapshot(`
+      "dragPos:
+        bar: 5,6,7,8
+      "
+    `)
   })
 })
