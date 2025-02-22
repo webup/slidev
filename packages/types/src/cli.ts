@@ -4,19 +4,22 @@ export interface CommonArgs {
 }
 
 export interface ExportArgs extends CommonArgs {
-  output?: string
-  format?: string
-  timeout?: number
-  range?: string
-  dark?: boolean
+  'output'?: string
+  'format'?: string
+  'timeout'?: number
+  'wait'?: number
+  'wait-until'?: string
+  'range'?: string
+  'dark'?: boolean
   'with-clicks'?: boolean
   'executable-path'?: string
   'with-toc'?: boolean
   'per-slide'?: boolean
+  'scale'?: number
+  'omit-background'?: boolean
 }
 
 export interface BuildArgs extends ExportArgs {
-  watch: boolean
   out: string
   base?: string
   download?: boolean

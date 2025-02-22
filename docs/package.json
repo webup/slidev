@@ -1,0 +1,36 @@
+{
+  "name": "docs",
+  "type": "module",
+  "version": "51.3.0",
+  "private": true,
+  "scripts": {
+    "dev": "vitepress",
+    "build": "vitepress build",
+    "preview": "vitepress preview"
+  },
+  "dependencies": {
+    "@antfu/utils": "catalog:",
+    "@vueuse/core": "catalog:",
+    "typeit": "catalog:"
+  },
+  "devDependencies": {
+    "@iconify/json": "catalog:",
+    "@shikijs/vitepress-twoslash": "catalog:",
+    "@slidev/client": "workspace:*",
+    "@slidev/parser": "workspace:*",
+    "@slidev/types": "workspace:*",
+    "@types/node": "catalog:",
+    "@unocss/reset": "catalog:",
+    "fast-glob": "catalog:",
+    "gray-matter": "catalog:",
+    "markdown-it": "catalog:",
+    "shiki": "catalog:",
+    "typescript": "catalog:",
+    "unocss": "catalog:",
+    "unplugin-icons": "catalog:",
+    "unplugin-vue-components": "catalog:",
+    "vite-plugin-inspect": "catalog:",
+    "vitepress": "catalog:",
+    "vue": "catalog:"
+  }
+}

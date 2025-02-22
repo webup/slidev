@@ -1,7 +1,4 @@
-import './declare'
-
-export * from './server'
-export * from './plugins/preset'
+export { createServer } from './commands/serve'
 export * from './options'
-export * from './plugins/windicss'
 export { parser } from './parser'
+export { ViteSlidevPlugin } from './vite'

@@ -1,25 +1,22 @@
-import type { SlidevConfig } from '@slidev/types'
-import type { UnwrapNestedRefs } from 'vue'
-import { computed } from 'vue'
+import configs from '#slidev/configs'
 import { objectMap } from '@antfu/utils'
+import { computed } from 'vue'
 
-// @ts-expect-error missing types
-import _configs from '/@slidev/configs'
-import type { SlidevContext } from './modules/context'
+export { configs }
 
-export const configs = _configs as SlidevConfig
-export const slideAspect = configs.aspectRatio ?? (16 / 9)
-export const slideWidth = configs.canvasWidth ?? 980
+export const mode = __DEV__ ? 'dev' : 'build'
+
+export const slideAspect = computed(() => configs.aspectRatio)
+export const slideWidth = computed(() => configs.canvasWidth)
+
 // To honor the aspect ratio more as possible, we need to approximate the height to the next integer.
 // Doing this, we will prevent on print, to create an additional empty white page after each page.
-export const slideHeight = Math.ceil(slideWidth / slideAspect)
+export const slideHeight = computed(() => Math.ceil(slideWidth.value / slideAspect.value))
 
 export const themeVars = computed(() => {
   return objectMap(configs.themeConfig || {}, (k, v) => [`--slidev-theme-${k}`, v])
 })
 
-declare module 'vue' {
-  interface ComponentCustomProperties {
-    $slidev: UnwrapNestedRefs<SlidevContext>
-  }
-}
+export const slidesTitle = configs.slidesTitle
+
+export const pathPrefix = import.meta.env.BASE_URL + (__SLIDEV_HASH_ROUTE__ ? '#/' : '')

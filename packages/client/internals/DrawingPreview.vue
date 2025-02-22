@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { drawingState } from '../logic/drawings'
+import { useDrawings } from '../composables/useDrawings'
 
 defineProps<{ page: number }>()
+
+const { drawingState } = useDrawings()
 </script>
 
 <template>
