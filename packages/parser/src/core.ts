@@ -1,43 +1,32 @@
-import YAML from 'js-yaml'
-import { isObject, isTruthy, objectMap } from '@antfu/utils'
-import type { FrontmatterStyle, PreparserExtensionFromHeadmatter, SlideInfo, SlideInfoBase, SlidevFeatureFlags, SlidevMarkdown, SlidevPreparserExtension, SlidevThemeMeta } from '@slidev/types'
-import { resolveConfig } from './config'
+import type { FrontmatterStyle, SlidevDetectedFeatures, SlidevMarkdown, SlidevPreparserExtension, SourceSlideInfo } from '@slidev/types'
+import { ensurePrefix } from '@antfu/utils'
+import YAML from 'yaml'
+
+export interface SlidevParserOptions {
+  noParseYAML?: boolean
+  preserveCR?: boolean
+}
 
 export function stringify(data: SlidevMarkdown) {
-  return `${
-    data.slides
-      .filter(slide => slide.source === undefined || slide.inline !== undefined)
-      .map((slide, idx) => stringifySlide(slide.inline || slide, idx))
-      .join('\n')
-      .trim()
-  }\n`
+  return `${data.slides.map(stringifySlide).join('\n').trim()}\n`
 }
 
-export function filterDisabled(data: SlidevMarkdown) {
-  data.slides = data.slides.filter(i => !i.frontmatter?.disabled)
-  return data
-}
-
-export function stringifySlide(data: SlideInfoBase, idx = 0) {
-  if (data.raw == null)
-    prettifySlide(data)
-
+export function stringifySlide(data: SourceSlideInfo, idx = 0) {
   return (data.raw.startsWith('---') || idx === 0)
     ? data.raw
-    : `---\n${data.raw.startsWith('\n') ? data.raw : `\n${data.raw}`}`
+    : `---\n${ensurePrefix('\n', data.raw)}`
 }
 
-export function prettifySlide(data: SlideInfoBase) {
-  data.content = `\n${data.content.trim()}\n`
-  data.raw = Object.keys(data.frontmatter || {}).length
+export function prettifySlide(data: SourceSlideInfo) {
+  const trimed = data.content.trim()
+  data.content = trimed ? `\n${data.content.trim()}\n` : ''
+  data.raw = data.frontmatterDoc?.contents
     ? data.frontmatterStyle === 'yaml'
-      ? `\`\`\`yaml\n${YAML.dump(data.frontmatter).trim()}\n\`\`\`\n${data.content}`
-      : `---\n${YAML.dump(data.frontmatter).trim()}\n---\n${data.content}`
+      ? `\`\`\`yaml\n${data.frontmatterDoc.toString().trim()}\n\`\`\`\n${data.content}`
+      : `---\n${data.frontmatterDoc.toString().trim()}\n---\n${data.content}`
     : data.content
   if (data.note)
     data.raw += `\n<!--\n${data.note.trim()}\n-->\n`
-  else
-    data.raw += '\n'
   return data
 }
 
@@ -46,53 +35,52 @@ export function prettify(data: SlidevMarkdown) {
   return data
 }
 
-function safeParseYAML(str: string) {
-  const res = YAML.load(str)
-  return isObject(res) ? res : {}
-}
-
-function matter(code: string) {
+function matter(code: string, options: SlidevParserOptions) {
   let type: FrontmatterStyle | undefined
-
-  const data: any = {}
+  let raw: string | undefined
 
   let content = code
     .replace(/^---.*\r?\n([\s\S]*?)---/, (_, f) => {
       type = 'frontmatter'
-      Object.assign(data, safeParseYAML(f))
+      raw = f
       return ''
     })
 
   if (type !== 'frontmatter') {
     content = content
-      .replace(/^\s*```ya?ml([\s\S]*?)```/, (_, d) => {
+      .replace(/^\s*```ya?ml([\s\S]*?)```/, (_, f) => {
         type = 'yaml'
-        Object.assign(data, safeParseYAML(d))
+        raw = f
         return ''
       })
   }
 
+  const doc = raw && !options.noParseYAML ? YAML.parseDocument(raw) : undefined
+
   return {
     type,
-    data,
+    raw,
+    doc,
+    data: doc?.toJSON(),
     content,
   }
 }
 
-export function detectFeatures(code: string): SlidevFeatureFlags {
+export function detectFeatures(code: string): SlidevDetectedFeatures {
   return {
-    katex: !!code.match(/\$.*?\$/) || !!code.match(/$\$\$/),
-    monaco: !!code.match(/{monaco.*}/),
+    katex: !!code.match(/\$.*?\$/) || !!code.match(/\$\$/),
+    monaco: code.match(/\{monaco.*\}/) ? scanMonacoReferencedMods(code) : false,
     tweet: !!code.match(/<Tweet\b/),
     mermaid: !!code.match(/^```mermaid/m),
   }
 }
 
-export function parseSlide(raw: string): SlideInfoBase {
-  const matterResult = matter(raw)
+export function parseSlide(raw: string, options: SlidevParserOptions = {}): Omit<SourceSlideInfo, 'filepath' | 'index' | 'start' | 'contentStart' | 'end'> {
+  const matterResult = matter(raw, options)
   let note: string | undefined
   const frontmatter = matterResult.data || {}
   let content = matterResult.content.trim()
+  const revision = hash(raw.trim())
 
   const comments = Array.from(content.matchAll(/<!--([\s\S]*?)-->/g))
   if (comments.length) {
@@ -120,33 +108,38 @@ export function parseSlide(raw: string): SlideInfoBase {
     raw,
     title,
     level,
+    revision,
     content,
     frontmatter,
     frontmatterStyle: matterResult.type,
+    frontmatterDoc: matterResult.doc,
+    frontmatterRaw: matterResult.raw,
     note,
   }
 }
 
 export async function parse(
   markdown: string,
-  filepath?: string,
-  themeMeta?: SlidevThemeMeta,
+  filepath: string,
   extensions?: SlidevPreparserExtension[],
-  onHeadmatter?: PreparserExtensionFromHeadmatter,
+  options: SlidevParserOptions = {},
 ): Promise<SlidevMarkdown> {
-  const lines = markdown.split(/\r?\n/g)
-  const slides: SlideInfo[] = []
+  const lines = markdown.split(options.preserveCR ? '\n' : /\r?\n/g)
+  const slides: SourceSlideInfo[] = []
 
   let start = 0
+  let contentStart = 0
 
   async function slice(end: number) {
     if (start === end)
       return
     const raw = lines.slice(start, end).join('\n')
-    const slide = {
-      ...parseSlide(raw),
+    const slide: SourceSlideInfo = {
+      ...parseSlide(raw, options),
+      filepath,
       index: slides.length,
       start,
+      contentStart,
       end,
     }
     if (extensions) {
@@ -160,22 +153,7 @@ export async function parse(
     }
     slides.push(slide)
     start = end + 1
-  }
-
-  // identify the headmatter, to be able to load preparser extensions
-  // (strict parsing based on the parsing code)
-  {
-    let hm = ''
-    if (lines[0].match(/^---([^-].*)?$/) && !lines[1]?.match(/^\s*$/)) {
-      let hEnd = 1
-      while (hEnd < lines.length && !lines[hEnd].trimEnd().match(/^---$/))
-        hEnd++
-      hm = lines.slice(1, hEnd).join('\n')
-    }
-    if (onHeadmatter) {
-      const o = YAML.load(hm) ?? {}
-      extensions = await onHeadmatter(o, extensions ?? [], filepath)
-    }
+    contentStart = end + 1
   }
 
   if (extensions) {
@@ -187,69 +165,147 @@ export async function parse(
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trimEnd()
-    if (line.match(/^---+/)) {
+    if (line.startsWith('---')) {
       await slice(i)
 
       const next = lines[i + 1]
       // found frontmatter, skip next dash
-      if (line.match(/^---([^-].*)?$/) && !next?.match(/^\s*$/)) {
+      if (line[3] !== '-' && next?.trim()) {
         start = i
         for (i += 1; i < lines.length; i++) {
-          if (lines[i].trimEnd().match(/^---$/))
+          if (lines[i].trimEnd() === '---')
             break
         }
+        contentStart = i + 1
       }
     }
     // skip code block
-    else if (line.startsWith('```')) {
-      for (i += 1; i < lines.length; i++) {
-        if (lines[i].startsWith('```'))
+    else if (line.trimStart().startsWith('```')) {
+      const codeBlockLevel = line.match(/^\s*`+/)![0]
+      let j = i + 1
+      for (; j < lines.length; j++) {
+        if (lines[j].startsWith(codeBlockLevel))
           break
       }
+      // Update i only when code block ends
+      if (j !== lines.length)
+        i = j
     }
   }
 
   if (start <= lines.length - 1)
     await slice(lines.length)
 
-  const headmatter = slides[0]?.frontmatter || {}
-  headmatter.title = headmatter.title || slides[0]?.title
-  const config = resolveConfig(headmatter, themeMeta, filepath)
-  const features = detectFeatures(markdown)
-
   return {
-    raw: markdown,
     filepath,
+    raw: markdown,
     slides,
-    config,
-    features,
-    headmatter,
-    themeMeta,
   }
 }
 
-export function mergeFeatureFlags(a: SlidevFeatureFlags, b: SlidevFeatureFlags): SlidevFeatureFlags {
-  return objectMap(a, (k, v) => [k, v || b[k]])
-}
+export function parseSync(
+  markdown: string,
+  filepath: string,
+  options: SlidevParserOptions = {},
+): SlidevMarkdown {
+  const lines = markdown.split(options.preserveCR ? '\n' : /\r?\n/g)
+  const slides: SourceSlideInfo[] = []
 
-// types auto discovery for TypeScript monaco
-export function scanMonacoModules(md: string) {
-  const typeModules = new Set<string>()
+  let start = 0
+  let contentStart = 0
 
-  md.replace(/^```(\w+?)\s*{monaco([\w:,-]*)}[\s\n]*([\s\S]+?)^```/mg, (full, lang = 'ts', options: string, code: string) => {
-    options = options || ''
-    lang = lang.trim()
-    if (lang === 'ts' || lang === 'typescript') {
-      Array.from(code.matchAll(/\s+from\s+(["'])([\/\w@-]+)\1/g))
-        .map(i => i[2])
-        .filter(isTruthy)
-        .map(i => typeModules.add(i))
+  function slice(end: number) {
+    if (start === end)
+      return
+    const raw = lines.slice(start, end).join('\n')
+    const slide: SourceSlideInfo = {
+      ...parseSlide(raw, options),
+      filepath,
+      index: slides.length,
+      start,
+      contentStart,
+      end,
     }
-    return ''
-  })
+    slides.push(slide)
+    start = end + 1
+    contentStart = end + 1
+  }
 
-  return Array.from(typeModules)
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trimEnd()
+    if (line.startsWith('---')) {
+      slice(i)
+
+      const next = lines[i + 1]
+      // found frontmatter, skip next dash
+      if (line[3] !== '-' && next?.trim()) {
+        start = i
+        for (i += 1; i < lines.length; i++) {
+          if (lines[i].trimEnd() === '---')
+            break
+        }
+        contentStart = i + 1
+      }
+    }
+    // skip code block
+    else if (line.trimStart().startsWith('```')) {
+      const codeBlockLevel = line.match(/^\s*`+/)![0]
+      let j = i + 1
+      for (; j < lines.length; j++) {
+        if (lines[j].startsWith(codeBlockLevel))
+          break
+      }
+      // Update i only when code block ends
+      if (j !== lines.length)
+        i = j
+    }
+  }
+
+  if (start <= lines.length - 1)
+    slice(lines.length)
+
+  return {
+    filepath,
+    raw: markdown,
+    slides,
+  }
 }
 
-export * from './utils'
+function scanMonacoReferencedMods(md: string) {
+  const types = new Set<string>()
+  const deps = new Set<string>()
+  md.replace(
+    /^```(\w+)\s*\{monaco([^}]*)\}\s*(\S[\s\S]*?)^```/gm,
+    (full, lang = 'ts', kind: string, code: string) => {
+      lang = lang.trim()
+      const isDep = kind === '-run'
+      if (['js', 'javascript', 'ts', 'typescript'].includes(lang)) {
+        for (const [, , specifier] of code.matchAll(/\s+from\s+(["'])([/.\w@-]+)\1/g)) {
+          if (specifier) {
+            if (!'./'.includes(specifier))
+              types.add(specifier) // All local TS files are loaded by globbing
+            if (isDep)
+              deps.add(specifier)
+          }
+        }
+      }
+      return ''
+    },
+  )
+  return {
+    types: Array.from(types),
+    deps: Array.from(deps),
+  }
+}
+
+function hash(str: string) {
+  let hash = 0
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) - hash) + str.charCodeAt(i)
+    hash |= 0
+  }
+  return hash.toString(36).slice(0, 12)
+}
+
 export * from './config'
+export * from './utils'

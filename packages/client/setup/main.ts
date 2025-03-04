@@ -1,10 +1,18 @@
-/* __imports__ */
-
 import type { AppContext } from '@slidev/types'
-import { MotionPlugin } from '@vueuse/motion'
-import StarportPlugin from 'vue-starport'
+import type { App } from 'vue'
+import setups from '#slidev/setups/main'
+import TwoSlashFloatingVue from '@shikijs/vitepress-twoslash/client'
+import { createHead } from '@unhead/vue'
+import { createRouter, createWebHashHistory, createWebHistory } from 'vue-router'
+import { createVClickDirectives } from '../modules/v-click'
+import { createVDragDirective } from '../modules/v-drag'
+import { createVMarkDirective } from '../modules/v-mark'
+import { createVMotionDirectives } from '../modules/v-motion'
+import setupRoutes from '../setup/routes'
 
-export default function setupMain(context: AppContext) {
+import '#slidev/styles'
+
+export default async function setupMain(app: App) {
   function setMaxHeight() {
     // disable the mobile navbar scroll
     // see https://css-tricks.com/the-trick-to-viewport-units-on-mobile/
@@ -13,12 +21,26 @@ export default function setupMain(context: AppContext) {
   setMaxHeight()
   window.addEventListener('resize', setMaxHeight)
 
-  context.app.use(MotionPlugin)
-  context.app.use(StarportPlugin({ keepAlive: true }))
+  const router = createRouter({
+    history: __SLIDEV_HASH_ROUTE__
+      ? createWebHashHistory(import.meta.env.BASE_URL)
+      : createWebHistory(import.meta.env.BASE_URL),
+    routes: setupRoutes(),
+  })
 
-  // @ts-expect-error inject in runtime
-  // eslint-disable-next-line unused-imports/no-unused-vars
-  const injection_arg = context
+  app.use(router)
+  app.use(createHead())
+  app.use(createVClickDirectives())
+  app.use(createVMarkDirective())
+  app.use(createVDragDirective())
+  app.use(createVMotionDirectives())
+  app.use(TwoSlashFloatingVue as any, { container: '#twoslash-container' })
 
-  /* __injections__ */
+  const context: AppContext = {
+    app,
+    router,
+  }
+
+  for (const setup of setups)
+    await setup(context)
 }

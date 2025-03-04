@@ -7,23 +7,29 @@ Usage:
 -->
 
 <script setup lang="ts">
-import { useScriptTag } from '@vueuse/core'
-import { getCurrentInstance, onMounted, ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { isDark } from '../logic/dark'
 
 const props = defineProps<{
   id: string | number
   scale?: string | number
   conversation?: string
+  cards?: 'hidden' | 'visible'
 }>()
 
 const tweet = ref<HTMLElement | null>()
 
-const vm = getCurrentInstance()!
 const loaded = ref(false)
 const tweetNotFound = ref(false)
 
-async function create() {
+async function create(retries = 10) {
+  // @ts-expect-error global
+  if (!window.twttr?.widgets?.createTweet) {
+    if (retries <= 0)
+      return console.error('Failed to load Twitter widget after 10 retries.')
+    setTimeout(() => create(retries - 1), 1000)
+    return
+  }
   // @ts-expect-error global
   const element = await window.twttr.widgets.createTweet(
     props.id.toString(),
@@ -31,6 +37,7 @@ async function create() {
     {
       theme: isDark.value ? 'dark' : 'light',
       conversation: props.conversation || 'none',
+      cards: props.cards,
     },
   )
   loaded.value = true
@@ -38,22 +45,9 @@ async function create() {
     tweetNotFound.value = true
 }
 
-// @ts-expect-error global
-if (window?.twttr?.widgets) {
-  onMounted(create)
-}
-else {
-  useScriptTag(
-    'https://platform.twitter.com/widgets.js',
-    () => {
-      if (vm.isMounted)
-        create()
-      else
-        onMounted(create, vm)
-    },
-    { async: true },
-  )
-}
+onMounted(() => {
+  create()
+})
 </script>
 
 <template>
@@ -61,7 +55,7 @@ else {
     <div ref="tweet" class="tweet slidev-tweet">
       <div v-if="!loaded || tweetNotFound" class="w-30 h-30 my-10px bg-gray-400 bg-opacity-10 rounded-lg flex opacity-50">
         <div class="m-auto animate-pulse text-4xl">
-          <carbon:logo-twitter />
+          <div class="i-carbon:logo-twitter" />
           <span v-if="tweetNotFound">Could not load tweet with id="{{ props.id }}"</span>
         </div>
       </div>

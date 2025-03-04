@@ -1,22 +1,30 @@
 <script setup lang="ts">
-import type { RouteRecordRaw } from 'vue-router'
-import { computed, ref } from 'vue'
-import { useNav } from '../composables/useNav'
-import { isClicksDisabled } from '../logic/nav'
+import type { SlideRoute } from '@slidev/types'
+import { createFixedClicks } from '../composables/useClicks'
+import { useFixedNav, useNav } from '../composables/useNav'
+import { CLICKS_MAX } from '../constants'
 import PrintSlideClick from './PrintSlideClick.vue'
 
-const props = defineProps<{ route: RouteRecordRaw }>()
-
-const clicksElements = ref(props.route.meta?.__clicksElements || [])
-const clicks = computed(() => props.route.meta?.clicks ?? clicksElements.value.length)
-
-const route = computed(() => props.route)
-const nav = useNav(route)
+const { route } = defineProps<{ hidden?: boolean, route: SlideRoute }>()
+const { isPrintWithClicks } = useNav()
+const clicks0 = createFixedClicks(route, () => isPrintWithClicks.value ? 0 : CLICKS_MAX)
 </script>
 
 <template>
-  <PrintSlideClick v-model:clicks-elements="clicksElements" :clicks="0" :nav="nav" :route="route" />
-  <template v-if="!isClicksDisabled">
-    <PrintSlideClick v-for="i of clicks" :key="i" :clicks="i" :nav="nav" :route="route" />
+  <PrintSlideClick
+    v-show="!hidden"
+    :nav="useFixedNav(route, clicks0)"
+  />
+  <template v-if="isPrintWithClicks">
+    <!--
+      clicks0.total can be any number >=0 when rendering.
+      So total-clicksStart can be negative in intermediate states.
+    -->
+    <PrintSlideClick
+      v-for="i in Math.max(0, clicks0.total - clicks0.clicksStart)"
+      v-show="!hidden"
+      :key="i"
+      :nav="useFixedNav(route, createFixedClicks(route, i + clicks0.clicksStart))"
+    />
   </template>
 </template>
