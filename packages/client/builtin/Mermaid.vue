@@ -14,18 +14,19 @@ pie
 
 <script setup lang="ts">
 import { getCurrentInstance, ref, watch, watchEffect } from 'vue'
-import { renderMermaid } from '../modules/mermaid'
 import ShadowRoot from '../internals/ShadowRoot.vue'
 import { isDark } from '../logic/dark'
+import { renderMermaid } from '../modules/mermaid'
 
 const props = defineProps<{
-  code: string
+  codeLz: string
   scale?: number
   theme?: string
 }>()
 
 const vm = getCurrentInstance()
 const el = ref<ShadowRoot>()
+const error = ref<string | null>(null)
 const html = ref('')
 
 watchEffect(async (onCleanup) => {
@@ -33,15 +34,22 @@ watchEffect(async (onCleanup) => {
   onCleanup(() => {
     disposed = true
   })
-  const svg = await renderMermaid(
-    props.code || '',
-    {
-      theme: props.theme || (isDark.value ? 'dark' : undefined),
-      ...vm!.attrs,
-    },
-  )
-  if (!disposed)
-    html.value = svg
+  error.value = null
+  try {
+    const svg = await renderMermaid(
+      props.codeLz || '',
+      {
+        theme: props.theme || (isDark.value ? 'dark' : undefined),
+        ...vm!.attrs,
+      },
+    )
+    if (!disposed)
+      html.value = svg
+  }
+  catch (e) {
+    error.value = `${e}`
+    console.warn(e)
+  }
 })
 
 const actualHeight = ref<number>()
@@ -69,5 +77,6 @@ watchEffect(() => {
 </script>
 
 <template>
-  <ShadowRoot class="mermaid" :inner-html="html" @shadow="el = $event" />
+  <pre v-if="error" border="1 red rounded" class="pa-3 text-wrap">{{ error }}</pre>
+  <ShadowRoot v-else class="mermaid" :inner-html="html" @shadow="el = $event" />
 </template>

@@ -1,15 +1,14 @@
-/* eslint-disable import/no-duplicates */
 import type { Awaitable } from '@antfu/utils'
-import type { ILanguageRegistration, IThemeRegistration, Lang, Highlighter as ShikiHighlighter, Theme } from 'shiki'
-import type * as Shiki from 'shiki'
-import type { CodeToHastOptions as ShikijiOptions } from 'shikiji'
-import type * as monaco from 'monaco-editor'
-import type { App, Ref } from 'vue'
-import type { Router } from 'vue-router'
-import type mermaid from 'mermaid'
 import type { KatexOptions } from 'katex'
-import type { WindiCssOptions } from 'vite-plugin-windicss'
+import type { MermaidConfig } from 'mermaid'
+import type * as monaco from 'monaco-editor'
+import type { BuiltinLanguage, BuiltinTheme, CodeOptionsMeta, CodeOptionsThemes, CodeToHastOptionsCommon, Highlighter, LanguageInput } from 'shiki'
 import type { VitePluginConfig as UnoCssConfig } from 'unocss/vite'
+import type { App, ComputedRef, Ref } from 'vue'
+import type { Router, RouteRecordRaw } from 'vue-router'
+import type { CodeRunnerProviders } from './code-runner'
+import type { ContextMenuItem } from './context-menu'
+import type { MarkdownTransformer } from './transform'
 import type { SlidevPreparserExtension } from './types'
 
 export interface AppContext {
@@ -17,34 +16,9 @@ export interface AppContext {
   router: Router
 }
 
-export interface ShikiDarkModeThemes {
-  dark: IThemeRegistration | Theme
-  light: IThemeRegistration | Theme
-}
-
-export interface ShikiOptions {
-  theme?: IThemeRegistration | ShikiDarkModeThemes | Theme
-  langs?: (ILanguageRegistration | Lang)[]
-  highlighter?: ShikiHighlighter
-}
-
-export interface ResolvedShikiOptions extends ShikiOptions {
-  themes: (IThemeRegistration | Theme)[]
-  darkModeThemes?: {
-    dark: Theme
-    light: Theme
-  }
-}
-
 export interface MonacoSetupReturn {
-  theme?: {
-    light?: string
-    dark?: string
-  }
   editorOptions?: monaco.editor.IEditorOptions
 }
-
-export type MermaidOptions = (typeof mermaid.initialize) extends (a: infer A) => any ? A : never
 
 export interface NavOperations {
   next: () => void
@@ -69,56 +43,67 @@ export interface ShortcutOptions {
   name?: string
 }
 
+export interface ShikiContext {
+  /**
+   * @deprecated Pass directly the theme name it's supported by Shiki.
+   * For custom themes, load it manually via `JSON.parse(fs.readFileSync(path, 'utf-8'))` and pass the raw JSON object instead.
+   */
+  loadTheme: (path: string) => Promise<any>
+}
+
+export type ShikiSetupReturn =
+  Partial<
+    & Omit<CodeToHastOptionsCommon<BuiltinLanguage>, 'lang'>
+    & CodeOptionsThemes<BuiltinTheme>
+    & CodeOptionsMeta
+    & {
+      setup: (highlighter: Highlighter) => Awaitable<void>
+      langs: (LanguageInput | BuiltinLanguage)[]
+    }
+  >
+
+export interface TransformersSetupReturn {
+  pre: (MarkdownTransformer | false)[]
+  preCodeblock: (MarkdownTransformer | false)[]
+  postCodeblock: (MarkdownTransformer | false)[]
+  post: (MarkdownTransformer | false)[]
+}
+
 // node side
-export type ShikiSetup = (shiki: typeof Shiki) => Awaitable<ShikiOptions | undefined>
-export type ShikijiSetup = () => Awaitable<Partial<ShikijiOptions> | undefined>
-export type KatexSetup = () => Awaitable<Partial<KatexOptions> | undefined>
-export type WindiSetup = () => Awaitable<Partial<WindiCssOptions> | undefined>
-export type UnoSetup = () => Awaitable<Partial<UnoCssConfig> | undefined>
-export type PreparserSetup = (filepath: string) => SlidevPreparserExtension
+export type ShikiSetup = (shiki: ShikiContext) => Awaitable<ShikiSetupReturn | void>
+export type KatexSetup = () => Awaitable<Partial<KatexOptions> | void>
+export type UnoSetup = () => Awaitable<Partial<UnoCssConfig> | void>
+export type TransformersSetup = () => Awaitable<Partial<TransformersSetupReturn>>
+export type PreparserSetup = (context: {
+  filepath: string
+  headmatter: Record<string, unknown>
+  mode?: string
+}) => Awaitable<SlidevPreparserExtension[]>
 
 // client side
-export type MonacoSetup = (m: typeof monaco) => Awaitable<MonacoSetupReturn>
+export type MonacoSetup = (m: typeof monaco) => Awaitable<MonacoSetupReturn | void>
 export type AppSetup = (context: AppContext) => Awaitable<void>
-export type MermaidSetup = () => Partial<MermaidOptions> | undefined
+export type RootSetup = () => Awaitable<void>
+export type RoutesSetup = (routes: RouteRecordRaw[]) => RouteRecordRaw[]
+export type MermaidSetup = () => Awaitable<Partial<MermaidConfig> | void>
 export type ShortcutsSetup = (nav: NavOperations, defaultShortcuts: ShortcutOptions[]) => Array<ShortcutOptions>
+export type CodeRunnersSetup = (runners: CodeRunnerProviders) => Awaitable<CodeRunnerProviders | void>
+export type ContextMenuSetup = (items: ComputedRef<ContextMenuItem[]>) => ComputedRef<ContextMenuItem[]>
 
-export function defineShikiSetup(fn: ShikiSetup) {
+function defineSetup<Fn>(fn: Fn) {
   return fn
 }
 
-export function defineShikijiSetup(fn: ShikijiSetup) {
-  return fn
-}
-
-export function defineWindiSetup(fn: WindiSetup) {
-  return fn
-}
-
-export function defineUnoSetup(fn: UnoSetup) {
-  return fn
-}
-
-export function defineMonacoSetup(fn: MonacoSetup) {
-  return fn
-}
-
-export function defineAppSetup(fn: AppSetup) {
-  return fn
-}
-
-export function defineMermaidSetup(fn: MermaidSetup) {
-  return fn
-}
-
-export function defineKatexSetup(fn: KatexSetup) {
-  return fn
-}
-
-export function defineShortcutsSetup(fn: ShortcutsSetup) {
-  return fn
-}
-
-export function definePreparserSetup(fn: PreparserSetup) {
-  return fn
-}
+export const defineShikiSetup = defineSetup<ShikiSetup>
+export const defineUnoSetup = defineSetup<UnoSetup>
+export const defineMonacoSetup = defineSetup<MonacoSetup>
+export const defineAppSetup = defineSetup<AppSetup>
+export const defineRootSetup = defineSetup<RootSetup>
+export const defineRoutesSetup = defineSetup<RoutesSetup>
+export const defineMermaidSetup = defineSetup<MermaidSetup>
+export const defineKatexSetup = defineSetup<KatexSetup>
+export const defineShortcutsSetup = defineSetup<ShortcutsSetup>
+export const defineTransformersSetup = defineSetup<TransformersSetup>
+export const definePreparserSetup = defineSetup<PreparserSetup>
+export const defineCodeRunnersSetup = defineSetup<CodeRunnersSetup>
+export const defineContextMenuSetup = defineSetup<ContextMenuSetup>

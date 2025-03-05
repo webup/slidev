@@ -7,18 +7,21 @@ Usage:
 <TocList :list="list"/>
 -->
 <script setup lang="ts">
-import { computed } from 'vue'
-import { toArray } from '@antfu/utils'
 import type { TocItem } from '@slidev/types'
-import Titles from '/@slidev/titles.md'
+import TitleRenderer from '#slidev/title-renderer'
+import { toArray } from '@antfu/utils'
+import { computed } from 'vue'
+import { useNav } from '../composables/useNav'
 
 const props = withDefaults(defineProps<{
   level: number
-  start?: number
+  start?: string | number
   listStyle?: string | string[]
   list: TocItem[]
   listClass?: string | string[]
 }>(), { level: 1 })
+
+const { isPresenter } = useNav()
 
 const classes = computed(() => {
   return [
@@ -47,8 +50,8 @@ const styles = computed(() => {
       :key="item.path" class="slidev-toc-item"
       :class="[{ 'slidev-toc-item-active': item.active }, { 'slidev-toc-item-parent-active': item.activeParent }]"
     >
-      <Link :to="item.path">
-        <Titles :no="item.path" />
+      <Link :to="isPresenter ? `/presenter${item.path}` : item.path">
+        <TitleRenderer :no="item.no" />
       </Link>
       <TocList
         v-if="item.children.length > 0"
@@ -65,7 +68,8 @@ const styles = computed(() => {
 .slidev-layout .slidev-toc-item p {
   margin: 0;
 }
-.slidev-layout .slidev-toc-item div, .slidev-layout .slidev-toc-item div p {
+.slidev-layout .slidev-toc-item div,
+.slidev-layout .slidev-toc-item div p {
   display: initial;
 }
 </style>

@@ -3,46 +3,22 @@ html.dark:root {
 }
 
 /* Shiki */
-html.dark .shiki-light {
-  display: none;
-}
-
-html:not(.dark) .shiki-dark {
-  display: none;
-}
-
-.shiki-container {
-  @apply relative flex flex-col;
-}
-
-.shiki-container > .shiki {
-  @apply h-full;
-}
-
-/* Shikiji */
-html.dark .shikiji {
+html.dark .shiki {
   color: var(--shiki-dark, inherit);
-  background: var(--shiki-dark-bg, inherit);
   --twoslash-popup-bg: var(--shiki-dark-bg, inherit);
 }
 
-html.dark .shikiji span {
+html.dark .shiki span {
   color: var(--shiki-dark);
 }
 
-html:not(.dark) .shikiji {
+html:not(.dark) .shiki {
   color: var(--shiki-light, inherit);
-  background: var(--shiki-light-bg, inherit);
   --twoslash-popup-bg: var(--shiki-light-bg, inherit);
 }
 
-html:not(.dark) .shikiji span {
+html:not(.dark) .shiki span {
   color: var(--shiki-light);
-}
-
-.shikiji.twoslash {
-  /* Do not set overflow so the hover popover can be displayed */
-  overflow: inherit;
 }
 
 .twoslash-meta-line.twoslash-popover-line {
@@ -64,12 +40,13 @@ html:not(.dark) .shikiji span {
   font-size: var(--slidev-code-font-size) !important;
   line-height: var(--slidev-code-line-height) !important;
   border-radius: var(--slidev-code-radius) !important;
+  background: var(--slidev-code-background);
   overflow: auto;
 }
 
-.slidev-code .line.highlighted {
+.slidev-code .slidev-code-highlighted {
 }
-.slidev-code .line.dishonored {
+.slidev-code .slidev-code-dishonored {
   opacity: 0.3;
   pointer-events: none;
 }
@@ -82,7 +59,21 @@ html:not(.dark) .shikiji span {
 .slidev-code-line-numbers .slidev-code code .line::before {
   content: counter(step);
   counter-increment: step;
-  @apply w-4 mr-6 inline-block text-right text-gray-400 dark:text-gray-600;
+  display: inline-block;
+  text-align: right;
+  --uno: w-4 mr-6 text-gray-400 dark-text-gray-600;
+}
+
+/* Inline Code */
+.slidev-layout :not(pre) > code {
+  font-size: 0.9em;
+  background: var(--slidev-code-background);
+  border-radius: var(--slidev-code-radius);
+  --uno: font-light py-0.5 px-1.5;
+}
+
+.slidev-layout :not(pre) > code:before {
+  margin-right: -0.08em;
 }
 
 /* Revert CSS reset for KaTex */
@@ -91,6 +82,3 @@ html:not(.dark) .shikiji span {
 .katex :before {
   border-color: currentColor;
 }
-
-/* CodeMirror */
-.CodeMirror pre.CodeMirror-placeholder { opacity: 0.4; }

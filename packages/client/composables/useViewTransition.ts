@@ -1,5 +1,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { configs } from '../env'
+import { getSlide } from '../logic/slides'
 
 export function useViewTransition() {
   const router = useRouter()
@@ -11,16 +13,13 @@ export function useViewTransition() {
   const supportViewTransition = typeof document !== 'undefined' && 'startViewTransition' in document
 
   router.beforeResolve((to, from) => {
-    const fromNo = from.meta.slide?.no
-    const toNo = to.meta.slide?.no
-    if (
-      !(
-        fromNo !== undefined && toNo !== undefined && (
-          (from.meta.transition === 'view-transition' && fromNo < toNo)
-          || (to.meta.transition === 'view-transition' && toNo < fromNo)
-        )
-      )
-    ) {
+    const fromMeta = getSlide(from.params.no as string)?.meta
+    const toMeta = getSlide(to.params.no as string)?.meta
+    const fromNo = fromMeta?.slide?.no
+    const toNo = toMeta?.slide?.no
+    const transitionType = fromNo != null && toNo != null && fromNo !== toNo
+      && ((fromNo < toNo ? fromMeta?.transition : toMeta?.transition) ?? configs.transition)
+    if (transitionType !== 'view-transition') {
       isViewTransition.value = false
       return
     }
@@ -40,17 +39,14 @@ export function useViewTransition() {
     let changeRoute: () => void
     const ready = new Promise<void>(resolve => (changeRoute = resolve))
 
-    // eslint-disable-next-line ts/ban-ts-comment
-    // @ts-expect-error
-    const transition = document.startViewTransition(() => {
-      changeRoute()
-      return promise
-    })
+    // Wait for `TransitionGroup` to become normal `div`
+    setTimeout(() => {
+      document.startViewTransition(() => {
+        changeRoute()
+        return promise
+      })
+    }, 50)
 
-    transition.finished.then(() => {
-      viewTransitionAbort = undefined
-      viewTransitionFinish = undefined
-    })
     return ready
   })
 

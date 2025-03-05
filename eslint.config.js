@@ -8,5 +8,18 @@ export default antfu(
         'vue/component-name-in-template-casing': 'off',
       },
     },
+    formatters: {
+      markdown: true,
+      css: true,
+      slidev: {
+        files: [
+          '**/slides.md',
+          '**/template.md',
+          '**/example.md',
+          'test/fixtures/markdown/**/*.md',
+          'packages/vscode/syntaxes/slidev.example.md',
+        ],
+      },
+    },
   },
 )
